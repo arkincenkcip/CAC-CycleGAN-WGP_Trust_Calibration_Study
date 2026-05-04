@@ -2159,6 +2159,7 @@ def main():
     _study_tester = get_tester(MODEL_PATH_base)
     _study_svm = load_svm_classifier("baseline")
     render_study_mode(_study_tester, _study_svm)
+    return
 
     # Sidebar: class & sample selection
     st.sidebar.header("Test Sample Selection")
