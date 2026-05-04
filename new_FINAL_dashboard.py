@@ -2104,17 +2104,24 @@ def render_study_mode(tester, svm_model) -> None:
             icon = _STATUS_ICON.get(ss.study_scenario_status.get(sc, "not_started"), "⬜")
             st.sidebar.markdown(f"{icon} {sc}")
 
-        # Download log button (visible to researcher)
+        # Download log button (researcher only — passcode protected)
         if STUDY_LOG_PATH.exists():
-            with _excel_lock():
-                log_bytes = STUDY_LOG_PATH.read_bytes()
-            st.sidebar.download_button(
-                label="Download study log",
-                data=log_bytes,
-                file_name="study_event_log.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+            st.sidebar.markdown("---")
+            dl_pwd = st.sidebar.text_input("Researcher passcode", type="password", key="_dl_pwd")
+            try:
+                correct_dl = st.secrets["RESEARCHER_PASSWORD"]
+            except (KeyError, FileNotFoundError):
+                correct_dl = None
+            if correct_dl and dl_pwd == correct_dl:
+                with _excel_lock():
+                    log_bytes = STUDY_LOG_PATH.read_bytes()
+                st.sidebar.download_button(
+                    label="Download study log",
+                    data=log_bytes,
+                    file_name="study_event_log.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
 
     if phase == "participant_entry":
         _render_participant_entry()
