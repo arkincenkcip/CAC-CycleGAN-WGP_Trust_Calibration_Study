@@ -804,8 +804,8 @@ EVENT_LOG_COLUMNS = [
     "trial_start_ts",
     "predict_ts",
     "generate_ts",
-    "time_to_decision_s",
-    "time_to_generate_s",
+    "svm_inference_s",
+    "cyclegan_inference_s",
     # ── top-3 thumbnail NRMSE hypotheses (trial_loaded, S3 only) ─────────────
     "top1_label", "top1_score",
     "top2_label", "top2_score",
@@ -867,7 +867,7 @@ def _log_study_event(event_type: str, **kwargs) -> None:
         "svm_variant":           ss.get("svm_subdir", "baseline"),
         "event_type":            event_type,
         "event_value":           kwargs.get("event_value"),
-        "timestamp":             datetime.now(),
+        "timestamp":             datetime.now().isoformat(timespec="milliseconds"),
         # per-interaction payload (trial_loaded + thumbnail_select)
         "class_id":              kwargs.get("class_id"),
         "nrmse_rank":            kwargs.get("nrmse_rank"),
@@ -881,8 +881,8 @@ def _log_study_event(event_type: str, **kwargs) -> None:
         "trial_start_ts":        None,
         "predict_ts":            None,
         "generate_ts":           None,
-        "time_to_decision_s":    None,
-        "time_to_generate_s":    None,
+        "svm_inference_s":    None,
+        "cyclegan_inference_s":    None,
         "top1_label": None, "top1_score": None,
         "top2_label": None, "top2_score": None,
         "top3_label": None, "top3_score": None,
@@ -904,10 +904,10 @@ def _log_study_event(event_type: str, **kwargs) -> None:
         row["generate_ts"] = (
             datetime.fromtimestamp(ss["study_generate_ts_ms"] / 1000)
             if ss.get("study_generate_ts_ms") else None)
-        row["time_to_decision_s"] = (
+        row["svm_inference_s"] = (
             round((ss["study_predict_ts_ms"] - ss["study_trial_start_ts_ms"]) / 1000, 3)
             if ss.get("study_predict_ts_ms") and ss.get("study_trial_start_ts_ms") else None)
-        row["time_to_generate_s"] = (
+        row["cyclegan_inference_s"] = (
             round((ss["study_generate_ts_ms"] - ss["study_trial_start_ts_ms"]) / 1000, 3)
             if ss.get("study_generate_ts_ms") and ss.get("study_trial_start_ts_ms") else None)
 
@@ -2853,7 +2853,7 @@ def main():
                     return None
 
                 row = {
-                    "datetime_local": datetime.now().isoformat(timespec="seconds"),
+                    "datetime_local": datetime.now().isoformat(timespec="milliseconds"),
                     "loaded_experiment": st.session_state.get("loaded_experiment"),
                     "svm_subdir": st.session_state.get("svm_subdir"),
                     "scenario_mode": st.session_state.get("scenario_mode"),
