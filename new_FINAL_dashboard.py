@@ -121,7 +121,7 @@ st.iframe("""
     }, true);
 })();
 </script>
-""", height=0)
+""", height=1)
 
 # Remove top padding
 st.markdown("""
