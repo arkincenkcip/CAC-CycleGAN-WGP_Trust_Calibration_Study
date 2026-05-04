@@ -2155,24 +2155,10 @@ def main():
     st.session_state.setdefault("full_svm_mis_by_class", {})
     st.session_state.setdefault("full_svm_mis_into_class", {})
 
-    # ── Study mode toggle (top of sidebar) ───────────────────────────────────
-    study_active = st.sidebar.toggle(
-        "🔬 Study Mode",
-        value=st.session_state.get("study_mode_active", True),
-        key="study_mode_toggle",
-    )
-    st.session_state.study_mode_active = study_active
-
-    if study_active:
-        _study_tester = get_tester(MODEL_PATH_base)
-        _study_svm = load_svm_classifier("baseline")
-        render_study_mode(_study_tester, _study_svm)
-        return
-    # ── End study mode ────────────────────────────────────────────────────────
-
-    # Store messages ...
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    st.session_state.study_mode_active = True
+    _study_tester = get_tester(MODEL_PATH_base)
+    _study_svm = load_svm_classifier("baseline")
+    render_study_mode(_study_tester, _study_svm)
 
     # Sidebar: class & sample selection
     st.sidebar.header("Test Sample Selection")
