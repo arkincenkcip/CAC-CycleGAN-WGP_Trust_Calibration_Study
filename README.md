@@ -1,1 +1,0 @@
-# CAC-CycleGAN-WGP_Trust_Calibration_Study
