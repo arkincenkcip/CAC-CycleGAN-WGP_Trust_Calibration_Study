@@ -85,6 +85,30 @@ data = _load_data()
 # ---------------------------------------------------------
 st.set_page_config(page_title="CycleGAN Fault Dashboard", layout="wide")
 
+# ── Authentication ────────────────────────────────────────────────────────────
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    col = st.columns([1, 2, 1])[1]
+    with col:
+        st.markdown("## Research Experiment Access")
+        st.markdown("This application is restricted to study participants.")
+        pwd = st.text_input("Password", type="password", key="_login_pwd")
+        if st.button("Submit", use_container_width=True):
+            try:
+                correct = st.secrets["APP_PASSWORD"]
+            except (KeyError, FileNotFoundError):
+                st.error("APP_PASSWORD secret is not configured.")
+                st.stop()
+            if pwd == correct:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password. Please try again.")
+    st.stop()
+# ── End authentication ────────────────────────────────────────────────────────
+
 # Block F5 / Ctrl+R page refresh at all times
 components.html("""
 <script>
