@@ -84,7 +84,7 @@ class ModelTester:
             raise FileNotFoundError(f"Model file not found: {model_path}")
         
         print("STEP1: starting torch.load")
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         print("STEP2: checkpoint loaded")
         # 加载生成器和判别器权重
         self.gan.g_AB.load_state_dict(checkpoint['g_AB_state_dict'])

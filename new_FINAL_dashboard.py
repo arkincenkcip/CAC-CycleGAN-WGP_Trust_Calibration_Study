@@ -38,6 +38,9 @@ OUT_DIR = PROJECT_ROOT / "resources" / "models" /"epoch_models"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 # --- end portable path setup ---
 
+# Must be the first Streamlit command
+st.set_page_config(page_title="CycleGAN Fault Dashboard", layout="wide")
+
 #MODEL_PATH_base = OUT_DIR/'generators_all_faults'/'model_acc_100.00_epoch_756.pth'
 MODEL_PATH_base = OUT_DIR/'generators_all_faults'/'model_acc_100.00_epoch_291.pth'
 MODEL_PATH_exclude_fault = OUT_DIR/'generators_no_2_fault'/'model_acc_100.00_epoch_360.pth'
@@ -79,11 +82,6 @@ data = _load_data()
 
 
 
-
-# ---------------------------------------------------------
-# Highlight selected preview box with thick border
-# ---------------------------------------------------------
-st.set_page_config(page_title="CycleGAN Fault Dashboard", layout="wide")
 
 # ── Authentication ────────────────────────────────────────────────────────────
 if "authenticated" not in st.session_state:
