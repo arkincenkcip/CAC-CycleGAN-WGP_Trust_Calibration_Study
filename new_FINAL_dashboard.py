@@ -18,8 +18,10 @@ import joblib
 
 import plotly.graph_objects as go   
 
+import io
 import time
 import json
+import threading
 from datetime import datetime
 
 
@@ -310,12 +312,19 @@ def _ensure_log_workbook(path: Path, sheet_name: str, columns: list[str]) -> Non
         ws.append(columns)
         wb.save(path)
 
+@st.cache_resource
+def _excel_lock() -> threading.Lock:
+    """Single lock shared across all sessions — serialises all Excel file writes."""
+    return threading.Lock()
+
+
 def _append_log_row(path: Path, sheet_name: str, columns: list[str], row_dict: dict) -> None:
-    _ensure_log_workbook(path, sheet_name, columns)
-    wb = load_workbook(path)
-    ws = wb[sheet_name]
-    ws.append([row_dict.get(col, None) for col in columns])
-    wb.save(path)
+    with _excel_lock():
+        _ensure_log_workbook(path, sheet_name, columns)
+        wb = load_workbook(path)
+        ws = wb[sheet_name]
+        ws.append([row_dict.get(col, None) for col in columns])
+        wb.save(path)
 
 # -----------------------------
 # Timer helpers
@@ -934,17 +943,18 @@ def _log_study_event(event_type: str, **kwargs) -> None:
 
 
 def _flush_log_buffer() -> None:
-    """Write all buffered event rows to Excel in one open+save cycle."""
+    """Write all buffered event rows to Excel under the shared lock."""
     ss  = st.session_state
     buf = ss.get("study_log_buffer", [])
     if not buf:
         return
-    _ensure_log_workbook(STUDY_LOG_PATH, STUDY_LOG_SHEET, EVENT_LOG_COLUMNS)
-    wb = load_workbook(STUDY_LOG_PATH)
-    ws = wb[STUDY_LOG_SHEET]
-    for row in buf:
-        ws.append([row.get(col, None) for col in EVENT_LOG_COLUMNS])
-    wb.save(STUDY_LOG_PATH)
+    with _excel_lock():
+        _ensure_log_workbook(STUDY_LOG_PATH, STUDY_LOG_SHEET, EVENT_LOG_COLUMNS)
+        wb = load_workbook(STUDY_LOG_PATH)
+        ws = wb[STUDY_LOG_SHEET]
+        for row in buf:
+            ws.append([row.get(col, None) for col in EVENT_LOG_COLUMNS])
+        wb.save(STUDY_LOG_PATH)
     ss.study_log_buffer = []
 
 
@@ -2093,6 +2103,18 @@ def render_study_mode(tester, svm_model) -> None:
         for sc in ["S1", "S2", "S3"]:
             icon = _STATUS_ICON.get(ss.study_scenario_status.get(sc, "not_started"), "⬜")
             st.sidebar.markdown(f"{icon} {sc}")
+
+        # Download log button (visible to researcher)
+        if STUDY_LOG_PATH.exists():
+            with _excel_lock():
+                log_bytes = STUDY_LOG_PATH.read_bytes()
+            st.sidebar.download_button(
+                label="Download study log",
+                data=log_bytes,
+                file_name="study_event_log.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
 
     if phase == "participant_entry":
         _render_participant_entry()
