@@ -6,7 +6,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
-import streamlit.components.v1 as components
 
 from scipy.ndimage import maximum_filter1d, uniform_filter1d
 from matplotlib.colors import TwoSlopeNorm
@@ -108,7 +107,7 @@ if not st.session_state.authenticated:
 # ── End authentication ────────────────────────────────────────────────────────
 
 # Block F5 / Ctrl+R page refresh at all times
-components.html("""
+st.iframe("""
 <script>
 (function() {
     var doc = window.parent.document;
