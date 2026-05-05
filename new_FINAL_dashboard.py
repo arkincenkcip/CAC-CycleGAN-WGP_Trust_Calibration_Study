@@ -19,6 +19,7 @@ import joblib
 import plotly.graph_objects as go   
 
 import io
+import base64
 import time
 import json
 import threading
@@ -1639,6 +1640,44 @@ def _render_trial_s2(signal: np.ndarray, pred: int) -> None:
                 st.plotly_chart(ref_fig, use_container_width=True)
 
 
+@st.cache_data(max_entries=300, show_spinner=False)
+def _thumbnail_b64(
+    gen_sig_bytes: bytes,
+    sig_shape: tuple,
+    ymin: float,
+    ymax: float,
+    is_selected: bool,
+    is_top3: bool,
+    is_pred_tile: bool,
+) -> str:
+    """Render one S3 thumbnail to a base64 PNG string (cached per unique combo)."""
+    gen_sig = np.frombuffer(gen_sig_bytes, dtype=np.float32).reshape(sig_shape)
+    fig, ax = plt.subplots(figsize=(4.3, 1.8))
+    ax.set_facecolor("#b8b8b8" if is_selected else "white")
+    ax.plot(gen_sig, color="green", linewidth=0.8)
+
+    border_w = 5.0 if is_top3 else 2.0
+    for spine in ax.spines.values():
+        spine.set_linewidth(border_w)
+        if is_pred_tile:
+            spine.set_edgecolor("#ffc107")
+
+    if is_selected:
+        ax.plot(0.90, 0.80, "D", color="#000000", markersize=20,
+                transform=ax.transAxes, zorder=5, markeredgewidth=0)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_ylim(ymin, ymax)
+    ax.grid(True, alpha=0.3)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
 def _render_trial_s3(signal: np.ndarray, pred: int) -> None:
     """CycleGAN grid + overlay when a class tile is selected."""
     ss               = st.session_state
@@ -1735,26 +1774,16 @@ def _render_trial_s3(signal: np.ndarray, pred: int) -> None:
             is_top3      = slot in top3_idx_set
             is_pred_tile = (pred is not None and int(class_label) == int(pred))
 
-            fig, ax = plt.subplots(figsize=(4.3, 1.8))
-            ax.set_facecolor("#b8b8b8" if is_selected else "white")
-            ax.plot(gen_sig, color="green", linewidth=0.8)
-
-            border_w = 5.0 if is_top3 else 2.0
-            for spine in ax.spines.values():
-                spine.set_linewidth(border_w)
-                if is_pred_tile:
-                    spine.set_edgecolor("#ffc107")
-
-            if is_selected:
-                ax.plot(0.90, 0.80, "D", color="#000000", markersize=20,
-                        transform=ax.transAxes, zorder=5, markeredgewidth=0)
-
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_ylim(ymin, ymax)
-            ax.grid(True, alpha=0.3)
-            st.pyplot(fig)
-            plt.close(fig)
+            b64 = _thumbnail_b64(
+                gen_sig.astype(np.float32).tobytes(),
+                gen_sig.shape,
+                float(ymin), float(ymax),
+                bool(is_selected), bool(is_top3), bool(is_pred_tile),
+            )
+            st.markdown(
+                f'<img src="data:image/png;base64,{b64}" style="width:100%;display:block;"/>',
+                unsafe_allow_html=True,
+            )
 
             if st.button(
                 f"Select Class {class_label}",
