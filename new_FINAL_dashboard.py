@@ -26,7 +26,8 @@ import threading
 from datetime import datetime
 
 
-from openpyxl import Workbook, load_workbook
+import gspread
+from google.oauth2.service_account import Credentials
 from scipy.interpolate import make_interp_spline
 from scipy.interpolate import UnivariateSpline
 
@@ -167,11 +168,9 @@ st.markdown("""
 
 
 # -----------------------------
-# Experiment logging (Excel)
+# Experiment logging (Google Sheets)
 # -----------------------------
-LOG_DIR = Path(__file__).resolve().parent / "experiment_logs"
-LOG_PATH = LOG_DIR / "trust_logs.xlsx"
-LOG_SHEET = "logs"
+LOG_SHEET = "trust_logs"
 
 LOG_COLUMNS = [
     # core
@@ -278,54 +277,47 @@ def _compute_penalty_score(decision, true_label, predicted_label):
 
 
 
-def _ensure_log_workbook(path: Path, sheet_name: str, columns: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not path.exists():
-        wb = Workbook()
-        ws = wb.active
-        ws.title = sheet_name
-        ws.append(columns)
-        wb.save(path)
-        return
-
-    try:
-        wb = load_workbook(path)
-    except Exception:
-        # File is corrupted or not a valid xlsx — recreate it.
-        wb = Workbook()
-        ws = wb.active
-        ws.title = sheet_name
-        ws.append(columns)
-        wb.save(path)
-        return
-
-    if sheet_name not in wb.sheetnames:
-        ws = wb.create_sheet(sheet_name)
-        ws.append(columns)
-        wb.save(path)
-        return
-
-    ws = wb[sheet_name]
-    # If sheet exists but header is missing/empty, write it.
-    if ws.max_row < 1 or all((ws.cell(row=1, column=c+1).value is None) for c in range(len(columns))):
-        ws.delete_rows(1, ws.max_row)
-        ws.append(columns)
-        wb.save(path)
+_GSHEETS_SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+]
 
 @st.cache_resource
-def _excel_lock() -> threading.Lock:
-    """Single lock shared across all sessions — serialises all Excel file writes."""
+def _gsheet_client() -> gspread.Client:
+    creds = Credentials.from_service_account_info(
+        dict(st.secrets["gcp_service_account"]),
+        scopes=_GSHEETS_SCOPES,
+    )
+    return gspread.authorize(creds)
+
+
+@st.cache_resource
+def _gsheet_spreadsheet() -> gspread.Spreadsheet:
+    client = _gsheet_client()
+    return client.open_by_key(st.secrets["GSHEET_ID"])
+
+
+def _get_or_create_worksheet(sheet_name: str, columns: list[str]) -> gspread.Worksheet:
+    """Return the named worksheet, creating it with a header row if it doesn't exist."""
+    ss = _gsheet_spreadsheet()
+    try:
+        ws = ss.worksheet(sheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = ss.add_worksheet(title=sheet_name, rows=5000, cols=len(columns))
+        ws.append_row(columns, value_input_option="RAW")
+    return ws
+
+
+@st.cache_resource
+def _gsheets_lock() -> threading.Lock:
+    """Single in-process lock — prevents concurrent API calls from the same worker."""
     return threading.Lock()
 
 
-def _append_log_row(path: Path, sheet_name: str, columns: list[str], row_dict: dict) -> None:
-    with _excel_lock():
-        _ensure_log_workbook(path, sheet_name, columns)
-        wb = load_workbook(path)
-        ws = wb[sheet_name]
-        ws.append([row_dict.get(col, None) for col in columns])
-        wb.save(path)
+def _append_log_row(sheet_name: str, columns: list[str], row_dict: dict) -> None:
+    row = [str(row_dict.get(col, "")) if row_dict.get(col) is not None else "" for col in columns]
+    with _gsheets_lock():
+        ws = _get_or_create_worksheet(sheet_name, columns)
+        ws.append_row(row, value_input_option="RAW")
 
 # -----------------------------
 # Timer helpers
@@ -766,7 +758,6 @@ def get_tester(model_path: Path):
 STUDY_POOLS_PATH = PROJECT_ROOT / "study_pools_VERIFIED.json"
 
 #STUDY_POOLS_PATH = PROJECT_ROOT / "study_pools_N3_FINAL.json"
-STUDY_LOG_PATH   = LOG_DIR / "study_event_log.xlsx"
 STUDY_LOG_SHEET  = "study_events"
 # ── experimental toggle ──────────────────────────────────────────────────────
 _COMPARE_WITH_REAL = True   # set False (or delete guarded blocks) to disable
@@ -944,18 +935,18 @@ def _log_study_event(event_type: str, **kwargs) -> None:
 
 
 def _flush_log_buffer() -> None:
-    """Write all buffered event rows to Excel under the shared lock."""
+    """Write all buffered event rows to Google Sheets under the shared lock."""
     ss  = st.session_state
     buf = ss.get("study_log_buffer", [])
     if not buf:
         return
-    with _excel_lock():
-        _ensure_log_workbook(STUDY_LOG_PATH, STUDY_LOG_SHEET, EVENT_LOG_COLUMNS)
-        wb = load_workbook(STUDY_LOG_PATH)
-        ws = wb[STUDY_LOG_SHEET]
-        for row in buf:
-            ws.append([row.get(col, None) for col in EVENT_LOG_COLUMNS])
-        wb.save(STUDY_LOG_PATH)
+    with _gsheets_lock():
+        ws = _get_or_create_worksheet(STUDY_LOG_SHEET, EVENT_LOG_COLUMNS)
+        rows = [
+            [str(row.get(col, "")) if row.get(col) is not None else "" for col in EVENT_LOG_COLUMNS]
+            for row in buf
+        ]
+        ws.append_rows(rows, value_input_option="RAW")
     ss.study_log_buffer = []
 
 
@@ -2133,24 +2124,17 @@ def render_study_mode(tester, svm_model) -> None:
             icon = _STATUS_ICON.get(ss.study_scenario_status.get(sc, "not_started"), "⬜")
             st.sidebar.markdown(f"{icon} {sc}")
 
-        # Download log button (researcher only — passcode protected)
-        if STUDY_LOG_PATH.exists():
-            st.sidebar.markdown("---")
-            dl_pwd = st.sidebar.text_input("Researcher passcode", type="password", key="_dl_pwd")
-            try:
-                correct_dl = st.secrets["RESEARCHER_PASSWORD"]
-            except (KeyError, FileNotFoundError):
-                correct_dl = None
-            if correct_dl and dl_pwd == correct_dl:
-                with _excel_lock():
-                    log_bytes = STUDY_LOG_PATH.read_bytes()
-                st.sidebar.download_button(
-                    label="Download study log",
-                    data=log_bytes,
-                    file_name="study_event_log.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+        # Researcher access link (passcode protected)
+        st.sidebar.markdown("---")
+        dl_pwd = st.sidebar.text_input("Researcher passcode", type="password", key="_dl_pwd")
+        try:
+            correct_dl = st.secrets["RESEARCHER_PASSWORD"]
+        except (KeyError, FileNotFoundError):
+            correct_dl = None
+        if correct_dl and dl_pwd == correct_dl:
+            sheet_id = st.secrets.get("GSHEET_ID", "")
+            sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+            st.sidebar.markdown(f"[Open study log in Google Sheets]({sheet_url})")
 
     if phase == "participant_entry":
         _render_participant_entry()
@@ -2912,7 +2896,7 @@ def main():
                 }
 
                 # append to Excel
-                _append_log_row(LOG_PATH, LOG_SHEET, LOG_COLUMNS, row)
+                _append_log_row(LOG_SHEET, LOG_COLUMNS, row)
 
                 # load next unseen random test sample (same behavior as "random sample from all test samples")
                 n_total = int(streamlit_test_X.shape[0])
