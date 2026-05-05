@@ -27,7 +27,6 @@ from datetime import datetime
 
 
 import gspread
-from google.oauth2.service_account import Credentials
 from scipy.interpolate import make_interp_spline
 from scipy.interpolate import UnivariateSpline
 
@@ -277,22 +276,9 @@ def _compute_penalty_score(decision, true_label, predicted_label):
 
 
 
-_GSHEETS_SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-]
-
-@st.cache_resource
-def _gsheet_client() -> gspread.Client:
-    creds = Credentials.from_service_account_info(
-        dict(st.secrets["gcp_service_account"]),
-        scopes=_GSHEETS_SCOPES,
-    )
-    return gspread.authorize(creds)
-
-
 @st.cache_resource
 def _gsheet_spreadsheet() -> gspread.Spreadsheet:
-    client = _gsheet_client()
+    client = gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]))
     return client.open_by_key(st.secrets["GSHEET_ID"])
 
 
