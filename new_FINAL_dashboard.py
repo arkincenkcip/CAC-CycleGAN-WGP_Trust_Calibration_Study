@@ -279,10 +279,10 @@ def _compute_penalty_score(decision, true_label, predicted_label):
 @st.cache_resource
 def _gsheet_spreadsheet() -> gspread.Spreadsheet:
     info = dict(st.secrets["gcp_service_account"])
-    st.sidebar.write("DEBUG service account email:", info.get("client_email"))
-    st.sidebar.write("DEBUG sheet id:", st.secrets["GSHEET_ID"])
     client = gspread.service_account_from_dict(info)
-    return client.open_by_key(st.secrets["GSHEET_ID"])
+    sheet_id = st.secrets["GSHEET_ID"].strip()
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+    return client.open_by_url(url)
 
 
 def _get_or_create_worksheet(sheet_name: str, columns: list[str]) -> gspread.Worksheet:
