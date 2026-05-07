@@ -955,7 +955,7 @@ _CONDITION_LABEL = {
 }
 _SC_INFO = {
     "S1": {"title": "Scenario 1 (S1)", "pool": "A", "aid": "Plain spectrum — no overlay"},
-    "S2": {"title": "Scenario 2 (S2)", "pool": "B", "aid": "Spectrum + real training reference"},
+    "S2": {"title": "Scenario 2 (S2)", "pool": "B", "aid": "Spectrum + Real Examples (Paper)"},
     "S3": {"title": "Scenario 3 (S3)", "pool": "C", "aid": "Spectrum + CycleGAN hypotheses"},
 }
 _STATUS_ICON = {"not_started": "⬜", "in_progress": "🔄", "finished": "✅"}
