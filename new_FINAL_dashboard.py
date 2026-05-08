@@ -1205,7 +1205,7 @@ def _render_practice(svm_model) -> None:
                 if st.button("Submit →", key=f"prac_conf_submit_{idx}",
                              use_container_width=True, type="primary"):
                     ss.practice_conf_val          = conf_val
-                    ss.practice_show_result       = True
+                    ss.practice_show_result       = False
                     ss.practice_awaiting_feedback = False
                     st.rerun()
         return
