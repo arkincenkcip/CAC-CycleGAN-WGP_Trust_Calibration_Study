@@ -1954,12 +1954,11 @@ def _render_trial(tester, svm_model) -> None:
     else:
         _render_trial_s1(signal)
 
-    # ── Escape hatch (admin / error recovery) ────────────────────────────────
-    st.markdown("---")
-    if st.button("↩ Abandon scenario and return to menu", type="secondary"):
-        ss.study_phase    = "scenario_menu"
-        ss.active_scenario = None
-        st.rerun()
+    # ── Escape hatch disabled ─────────────────────────────────────────────────
+    # if st.button("↩ Abandon scenario and return to menu", type="secondary"):
+    #     ss.study_phase    = "scenario_menu"
+    #     ss.active_scenario = None
+    #     st.rerun()
 
 
 def _render_scenario_complete() -> None:
