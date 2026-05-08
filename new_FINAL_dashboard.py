@@ -1207,6 +1207,10 @@ def _render_practice(svm_model) -> None:
                     ss.practice_conf_val          = conf_val
                     ss.practice_show_result       = False
                     ss.practice_awaiting_feedback = False
+                    # advance to next trial immediately (no feedback screen)
+                    ss.practice_index            += 1
+                    ss.practice_trial_loaded      = False
+                    ss.practice_last_decision     = None
                     st.rerun()
         return
 
